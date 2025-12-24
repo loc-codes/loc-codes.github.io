@@ -1,0 +1,44 @@
+name: Generate Issues JSON
+
+permissions:
+  contents: write
+  issues: read
+
+on:
+  workflow_dispatch:
+  push:
+  issues:
+    types: [opened]
+
+jobs:
+  generate-json:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Fetch Issues
+      id: get-issues
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const fs = require('fs');
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'all',
+            per_page: 100,
+            sort: 'created',
+            direction: 'desc'
+          });
+          const issueData = issues.data.map(issue => ({ title: issue.title, url: issue.html_url }));
+          fs.writeFileSync('issue-titles.json', JSON.stringify(issueData, null, 2))
+
+    - name: Commit and push if it changed
+      run: |-
+        git config user.name "Automated"
+        git config user.email "actions@users.noreply.github.com"
+        git add -A
+        timestamp=$(date -u)
+        git commit -m "Latest data: ${timestamp}" || exit 0
+        git push
